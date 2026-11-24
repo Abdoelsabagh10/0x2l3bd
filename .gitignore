@@ -1,0 +1,22 @@
+# Secrets - never commit
+.env
+.env.*
+!.env.example
+
+# Subfinder provider configuration (contains API keys)
+.config/
+provider-config.yaml
+
+# Python runtime artifacts
+__pycache__/
+*.py[cod]
+
+# Installed recon tooling and MCP packages (large binaries)
+tools/
+
+# Program instance data: recon output, targets, reports (may contain sensitive evidence)
+programs/*
+!programs/_template/
+
+# Editor/backup copies
+*.bak

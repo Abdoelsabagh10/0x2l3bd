@@ -1,0 +1,681 @@
+{
+  "version": 1,
+  "updated": "2026-11-16",
+  "install_root": "tools",
+  "notes": "Only tools listed here may be installed or executed. Empty registry means no tool may run. Entries are added by the operator and reference operator-approved install sources and commands.",
+  "stages": [
+    "subdomains",
+    "urls",
+    "triage",
+    "javascript",
+    "content",
+    "target",
+    "alive"
+  ],
+  "excluded": [
+    {
+      "name": "subdominator",
+      "reason": "Excluded from the MVP: the latest dependency revoltutils 1.0.2 imports the POSIX-only modules pwd/grp and calls os.geteuid/getuid/getgid, so the tool cannot run on Windows. Files were removed and no replacement was added."
+    }
+  ],
+  "path_policy": "Every execution prepends the POSIX directory of each approved native executable to PATH, tools before system. All placeholders are rendered as POSIX paths (/a/...) before any Git Bash command runs.",
+  "env": {
+    "dotenv_file": ".env",
+    "example_file": ".env.example",
+    "gitignore_entry": ".env",
+    "load_before_execution": true,
+    "loader_git_bash": "set -a; [ -f .env ] && . ./.env; set +a",
+    "preflight": "for v in {required}; do [ -n \"${!v:-}\" ] || { echo \"blocked: missing env $v\" >&2; exit 2; }; done",
+    "variables": [
+      "GITHUB_TOKEN",
+      "PDCP_API_KEY"
+    ],
+    "redaction": "Values are never echoed, printed, or written to logs or run.json. Logs record only the variable name and whether it was set.",
+    "template_lines": [
+      "GITHUB_TOKEN=",
+      "PDCP_API_KEY="
+    ]
+  },
+  "tools": [
+    {
+      "name": "subfinder",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "2.17.0",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/projectdiscovery/subfinder/releases/download/v2.17.0/subfinder_2.17.0_windows_amd64.zip",
+        "sha256": "a3fd612928d591fb31c1e59a2e06055e364421ba32251e553073f5673a2d3103"
+      },
+      "executable": "tools/subdomains/subfinder/subfinder.exe",
+      "version_command": "subfinder -version",
+      "command_template": "subfinder -dL {input} -all -recursive | sort -u > {rawdir}/subfinder.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 10,
+        "internal_concurrency_source": "tool default (-t 10)",
+        "effective_max_concurrency": 10,
+        "rate_per_second": null,
+        "timeout_seconds": 1800
+      }
+    },
+    {
+      "name": "assetfinder",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "0.1.1",
+      "prerelease": true,
+      "release_channel": "prerelease",
+      "release_url": "https://github.com/tomnomnom/assetfinder/releases/tag/v0.1.1",
+      "release_note": "v0.1.1 is the only published Windows build and is flagged prerelease upstream; accepted deliberately. No -version flag, so integrity rests on the pinned SHA256.",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/tomnomnom/assetfinder/releases/download/v0.1.1/assetfinder-windows-amd64-0.1.1.zip",
+        "sha256": "39ce07c5e86995af83ddc36ed6bd4f7d2bf40497a85cc08ed8b94a6cad566cd3"
+      },
+      "executable": "tools/subdomains/assetfinder/assetfinder.exe",
+      "version_command": null,
+      "version_note": "No -version flag; verified by pinned SHA256.",
+      "command_template": "xargs -a {input} -I{} assetfinder --subs-only \"{}\" | sort -u > {rawdir}/assetfinder.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": null,
+        "internal_concurrency_source": "no concurrency flag; goroutine-per-request",
+        "effective_max_concurrency": null,
+        "rate_per_second": null,
+        "timeout_seconds": 900
+      }
+    },
+    {
+      "name": "findomain",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "10.0.1",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/Findomain/Findomain/releases/download/10.0.1/findomain-windows.exe.zip",
+        "sha256": "25431d805572cb99ba2d9a1a3506866d1262bfb6e268a492b4ae1701b4029687"
+      },
+      "executable": "tools/subdomains/findomain/findomain.exe",
+      "version_command": "findomain --version",
+      "command_template": "xargs -a {input} -I{} findomain -t \"{}\" -q | sort -u > {rawdir}/findomain.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": null,
+        "internal_concurrency_source": "not exposed; --threads deprecated, --lightweight-threads default 50",
+        "effective_max_concurrency": null,
+        "rate_per_second": null,
+        "timeout_seconds": 900
+      }
+    },
+    {
+      "name": "chaos",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "0.5.2",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/projectdiscovery/chaos-client/releases/download/v0.5.2/chaos-client_0.5.2_windows_amd64.zip",
+        "sha256": "c6bd81092717f9367ec68ccd3e620c1f95a8b02db9778e19d59577da44c08041"
+      },
+      "executable": "tools/subdomains/chaos/chaos.exe",
+      "version_command": "chaos -version",
+      "command_template": "xargs -a {input} -I{} chaos -d \"{}\" | sort -u > {rawdir}/chaos.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 1,
+        "internal_concurrency_source": "sequential xargs -I{} (one API query per domain)",
+        "effective_max_concurrency": 1,
+        "rate_per_second": null,
+        "timeout_seconds": 900
+      },
+      "requires_env": [
+        "PDCP_API_KEY"
+      ]
+    },
+    {
+      "name": "subenum",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "git:d83c6e9",
+      "install": {
+        "method": "binary",
+        "url": "https://raw.githubusercontent.com/bing0o/SubEnum/d83c6e92f3242ded8ef85e6d60ee12f19480bdbb/subenum.sh",
+        "source_commit": "d83c6e92f3242ded8ef85e6d60ee12f19480bdbb",
+        "sha256": "79032c1b6b2d85e68bca20ed80dd7081c9eb8420cbbbc52c2cb67dcbf961e63e"
+      },
+      "executable": "tools/subdomains/subenum/subenum.sh",
+      "version_command": null,
+      "depends_on": [
+        "subfinder",
+        "findomain",
+        "assetfinder"
+      ],
+      "dependency_preflight": "for d in subfinder findomain assetfinder; do command -v \"$d\" >/dev/null || exit 2; done",
+      "command_template": "bash {tool:subenum}/subenum.sh -l {input} -u wayback,crt,abuseipdb,Findomain,Subfinder,Assetfinder -o {rawdir}/subenum.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 1,
+        "internal_concurrency_source": "sequential function calls (no --parallel)",
+        "effective_max_concurrency": 1,
+        "rate_per_second": null,
+        "timeout_seconds": 3600
+      },
+      "notes": "Runs from the run directory (writes tmp-*); appends to -o. No GNU parallel/anew needed without --parallel/--silent."
+    },
+    {
+      "name": "github-subdomains",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "git:72a7c41",
+      "install": {
+        "method": "binary",
+        "url": "https://raw.githubusercontent.com/gwen001/github-search/72a7c41ba6cb613229f3d0df126cc7dfe8b2b75b/github-subdomains.py",
+        "source_commit": "72a7c41ba6cb613229f3d0df126cc7dfe8b2b75b",
+        "sha256": "6a8fea1dc0a97ecbf39a16f52e533ee5a709cdbc97b10094b4f38f7ec0a1c373"
+      },
+      "executable": "tools/subdomains/github-subdomains/github-subdomains.py",
+      "version_command": null,
+      "python_requirements": [
+        "requests==2.34.2",
+        "tldextract==5.4.0",
+        "colored==1.4.2",
+        "idna==3.20",
+        "urllib3==2.8.0",
+        "certifi==2026.10.23",
+        "charset-normalizer==3.5.2",
+        "requests-file==3.0.1",
+        "filelock==4.2.9"
+      ],
+      "python_lock": "tools/subdomains/github-subdomains/lib/lock.txt",
+      "import_probes": [
+        "python -c \"from colored import fg, bg, attr; import requests, tldextract\""
+      ],
+      "command_template": "PYTHONPATH={tool:github-subdomains}/lib xargs -a {input} -P 10 -I{} python {tool:github-subdomains}/github-subdomains.py -t \"$GITHUB_TOKEN\" -d \"{}\" 2>/dev/null | grep -Eo \"([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}\" | awk 'length($0) <= 100' | sort -u > {rawdir}/github-subdomains.txt",
+      "limits": {
+        "processes": 10,
+        "internal_concurrency": 30,
+        "internal_concurrency_source": "script internal Pool(30)",
+        "effective_max_concurrency": 300,
+        "rate_per_second": null,
+        "timeout_seconds": 1800
+      },
+      "requires_env": [
+        "GITHUB_TOKEN"
+      ]
+    },
+    {
+      "name": "dnscan",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "git:281721e",
+      "install": {
+        "method": "binary",
+        "url": "https://raw.githubusercontent.com/rbsec/dnscan/281721e84f18512a574da0a4917a2eff1ec9549d/dnscan.py",
+        "source_commit": "281721e84f18512a574da0a4917a2eff1ec9549d",
+        "sha256": "2bbfa6f3e9961f73e36cd98ff611b3e3175f1aa164f26ad8aab4f1038a84c7fb"
+      },
+      "executable": "tools/subdomains/dnscan/dnscan.py",
+      "version_command": "PYTHONPATH={tool:dnscan}/lib python {tool:dnscan}/dnscan.py --help",
+      "python_requirements": [
+        "dnspython==2.9.2",
+        "netaddr==1.3.0",
+        "cryptography==50.0.2",
+        "packaging==26.3",
+        "cffi==2.1.1",
+        "pycparser==3.12"
+      ],
+      "python_lock": "tools/subdomains/dnscan/lib/lock.txt",
+      "import_probes": [
+        "python -c \"import dns, netaddr, cryptography, packaging\""
+      ],
+      "command_template": "PYTHONPATH={tool:dnscan}/lib xargs -a {input} -P 5 -I{} python {tool:dnscan}/dnscan.py -d \"{}\" -w {wordlist:dnscan-subdomains-1000} -R 8.8.8.8,1.1.1.1 -t 300 2>/dev/null | grep -Eo \"([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}\" | sort -u > {rawdir}/dnscan.txt",
+      "limits": {
+        "processes": 5,
+        "internal_concurrency": 300,
+        "internal_concurrency_source": "explicit flag -t 300",
+        "effective_max_concurrency": 1500,
+        "rate_per_second": null,
+        "timeout_seconds": 3600
+      },
+      "notes": "Active DNS brute force. Requires explicit program.md authorization for active DNS brute force on this program; without it the tool is skipped. Flags -P 5 and -t 300 are fixed; a lower program.md limit blocks the stage."
+    },
+    {
+      "name": "dnsx",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "1.3.1",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/projectdiscovery/dnsx/releases/download/v1.3.1/dnsx_1.3.1_windows_amd64.zip",
+        "sha256": "112c2d62d67d26a1b940ed9d10d500d2aa1ee3e3e18393d181ac4969936b9d96"
+      },
+      "executable": "tools/subdomains/dnsx/dnsx.exe",
+      "version_command": "dnsx -version",
+      "command_template": "dnsx -l {rawdir}/wordlist-full.txt -a -resp -silent > {rawdir}/dnsx.txt",
+      "requires_input": "{rawdir}/wordlist-full.txt",
+      "notes": "Wordlist-based DNS resolution (active). Requires {rawdir}/wordlist-full.txt from an approved wordlist step and explicit program.md authorization for active DNS wordlist resolution. If the input is missing, skip dnsx; never generate or substitute a wordlist.",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 100,
+        "internal_concurrency_source": "tool default (-t 100)",
+        "effective_max_concurrency": 100,
+        "rate_per_second": null,
+        "timeout_seconds": 3600
+      }
+    },
+    {
+      "name": "jq",
+      "kind": "helper",
+      "stage": "subdomains",
+      "status": "approved",
+      "version": "1.8.2",
+      "install": {
+        "method": "binary",
+        "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
+        "sha256": "a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627"
+      },
+      "executable": "tools/subdomains/jq/jq.exe",
+      "version_command": "jq --version",
+      "command_template": null,
+      "notes": "Used by the crt.sh and wayback commands through the exported PATH."
+    },
+    {
+      "name": "puredns",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "blocked",
+      "version": "2.1.1",
+      "install": {
+        "method": null,
+        "url": "https://github.com/d3mondev/puredns/releases/tag/v2.1.1",
+        "sha256": null
+      },
+      "executable": null,
+      "command_template": "while IFS= read -r d; do puredns bruteforce {wordlist:seclists-dns-5000} \"$d\" -r {wordlist:trickest-resolvers} --resolvers-trusted {wordlist:trickest-trusted}; done < {input} | sort -u",
+      "notes": "BLOCKED: Linux/macOS assets only. No WSL, Go, or substitute proposed."
+    },
+    {
+      "name": "massdns",
+      "kind": "tool",
+      "stage": "subdomains",
+      "status": "blocked",
+      "version": "1.1.0",
+      "install": {
+        "method": null,
+        "url": "https://github.com/blechschmidt/massdns/releases/tag/v1.1.0",
+        "sha256": null
+      },
+      "executable": null,
+      "notes": "BLOCKED: no release assets, C source only. Required by puredns."
+    },
+    {
+      "name": "httpx",
+      "kind": "tool",
+      "stage": "alive",
+      "status": "approved",
+      "version": "1.12.0",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/projectdiscovery/httpx/releases/download/v1.12.0/httpx_1.12.0_windows_amd64.zip",
+        "sha256": "14d8ccaa2d95ce9365162682f1a2ba3f14d2000bb4bfb0924af65ec5163ae021"
+      },
+      "executable": "tools/alive/httpx/httpx.exe",
+      "version_command": "httpx -version",
+      "command_template": "httpx -silent -nc -sc -content-length -web-server -title -mc {status_codes} < {input} > {outfile} && d=$(dirname \"{outfile}\") && cp \"{outfile}\" \"$d/httpx-all.txt\" && awk '$2==\"[200]\"' \"{outfile}\" > \"$d/httpx-200.txt\" && awk '$2==\"[404]\"' \"{outfile}\" > \"$d/httpx-404.txt\" && awk '$2==\"[401]\"||$2==\"[403]\"' \"{outfile}\" > \"$d/httpx-401-403.txt\" && awk '$2==\"[500]\"||$2==\"[502]\"||$2==\"[503]\"' \"{outfile}\" > \"$d/httpx-500-502-503.txt\" && awk '$2==\"[301]\"||$2==\"[302]\"||$2==\"[303]\"||$2==\"[307]\"||$2==\"[308]\"' \"{outfile}\" > \"$d/httpx-redirects.txt\"",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 50,
+        "internal_concurrency_source": "tool default (-threads 50)",
+        "effective_max_concurrency": 50,
+        "rate_per_second": null,
+        "timeout_seconds": 1800
+      },
+      "notes": "Single invocation writes {outfile} (all matched responses, raw) and derives per-status files beside it: httpx-all.txt, httpx-200.txt, httpx-404.txt, httpx-401-403.txt, httpx-500-502-503.txt, httpx-redirects.txt."
+    },
+    {
+      "name": "httpx-urls",
+      "kind": "tool",
+      "stage": "urls",
+      "status": "approved",
+      "version": "1.12.0",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/projectdiscovery/httpx/releases/download/v1.12.0/httpx_1.12.0_windows_amd64.zip",
+        "sha256": "14d8ccaa2d95ce9365162682f1a2ba3f14d2000bb4bfb0924af65ec5163ae021"
+      },
+      "executable": "tools/alive/httpx/httpx.exe",
+      "version_command": "httpx -version",
+      "command_template": "httpx -silent -nc -mc 200 -retries 2 -rl 50 -threads 25 < {input} > {outfile}",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 25,
+        "internal_concurrency_source": "explicit -threads 25 (tool default is 50, not used)",
+        "effective_max_concurrency": 25,
+        "rate_per_second": 50,
+        "timeout_seconds": 1800
+      },
+      "notes": "URL-stage live probe only; single pass; URL-only output. Metadata flags -sc, -content-length, -web-server and -title were removed 2026-11-17 so {outfile} contains one bare URL per line and feeds URL Triage directly. Probing filters are preserved: -mc 200 is the server-side equivalent of the previous grep [200] derivation, so only HTTP 200 URLs are emitted and every URL in {input} is still probed. -retries 2 -rl 50 -threads 25 were added 2026-11-17 after a controlled re-probe showed the defaults silently dropped about 30 percent of requests (3127 of 9579 rows); the conservative settings restored full coverage (9579 rows). The stage:alive httpx entry is unchanged and remains authoritative for Subdomain Enumeration."
+    },
+    {
+      "name": "waybackurls",
+      "kind": "tool",
+      "stage": "urls",
+      "status": "approved",
+      "version": "0.1.0",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/tomnomnom/waybackurls/releases/download/v0.1.0/waybackurls-windows-amd64-0.1.0.zip",
+        "sha256": "1b0d51d9d73c08b863fd15ef770524330bdf18ebbf5fb2c3a9d8e21c301e6729"
+      },
+      "executable": "tools/urls/waybackurls/waybackurls.exe",
+      "version_command": null,
+      "version_note": "No -version flag; verified by pinned SHA256.",
+      "command_template": "cat {input} | waybackurls > {rawdir}/waybackurls.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 1,
+        "internal_concurrency_source": "no concurrency flag; sequential archive requests",
+        "effective_max_concurrency": 1,
+        "rate_per_second": null,
+        "timeout_seconds": 1800
+      },
+      "notes": "Operator intake approved 2026-11-11; status stays proposed until installation and smoke tests are accepted. Reads bare hostnames from stdin; Windows adaptation is the redirect to {rawdir} only."
+    },
+    {
+      "name": "gau",
+      "kind": "tool",
+      "stage": "urls",
+      "status": "approved",
+      "version": "2.2.4",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/lc/gau/releases/download/v2.2.4/gau_2.2.4_windows_amd64.zip",
+        "sha256": "46eac6d96c9479368d3006191611a33084f177fe4025efed985f40f4b7e51e64"
+      },
+      "executable": "tools/urls/gau/gau.exe",
+      "version_command": "gau --version",
+      "command_template": "cat {input} | gau > {rawdir}/gau.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 1,
+        "internal_concurrency_source": "tool default (--threads 1)",
+        "effective_max_concurrency": 1,
+        "rate_per_second": null,
+        "timeout_seconds": 1800
+      },
+      "notes": "Operator intake approved 2026-11-11; status stays proposed until installation and smoke tests are accepted. Reads bare hostnames from stdin; Windows adaptation is the redirect to {rawdir} only."
+    },
+    {
+      "name": "katana",
+      "kind": "tool",
+      "stage": "urls",
+      "status": "approved",
+      "version": "1.8.0",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/projectdiscovery/katana/releases/download/v1.8.0/katana_1.8.0_windows_amd64.zip",
+        "sha256": "8013253e3092e08524527a5c3f7ebd70747acc4bb51414858f8e6dffeb17f907"
+      },
+      "executable": "tools/urls/katana/katana.exe",
+      "version_command": "katana -version",
+      "command_template": "katana -list {input} -jc -kf all -d 5 -mdp 100 -fx -aff -fs rdn -f url -silent > {rawdir}/katana.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 10,
+        "internal_concurrency_source": "tool default (-c 10)",
+        "effective_max_concurrency": 10,
+        "rate_per_second": null,
+        "timeout_seconds": 3600
+      },
+      "notes": "Operator intake approved 2026-11-11; status stays proposed until installation and smoke tests are accepted. Bare hosts are accepted (addSchemeIfNotExists). -f is deprecated in 1.8.0 but functional; -fx only affects JSONL; -kf all needs depth >= 3 (d=5 satisfies it). -headless uses katana's own browser unless -sc (system-chrome) is added; -sc is NOT approved and must not be added without operator approval."
+    },
+    {
+      "name": "gospider",
+      "kind": "tool",
+      "stage": "urls",
+      "status": "approved",
+      "version": "1.1.6",
+      "install": {
+        "method": "zip",
+        "url": "https://github.com/jaeles-project/gospider/releases/download/v1.1.6/gospider_v1.1.6_windows_x86_64.zip",
+        "sha256": "71d1c81c42ec385dde9a6fbff9a6419d4568874e495e8c51618e39e5dab2848c"
+      },
+      "executable": "tools/urls/gospider/gospider.exe",
+      "version_command": "gospider --version",
+      "command_template": "gospider -S {input} -c 20 -d 3 --js --sitemap --robots --other-source --include-subs | grep -oE \"https?://[^ ]+\" | grep -vE \"\\.(jpg|png|css|svg|woff|gif|jpeg)$\" | sort -u > {rawdir}/gospider.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 20,
+        "internal_concurrency_source": "explicit flag -c 20; sites processed one at a time (-t default 1)",
+        "effective_max_concurrency": 20,
+        "rate_per_second": null,
+        "timeout_seconds": 3600
+      },
+      "notes": "Operator intake approved 2026-11-11; status stays proposed until installation and smoke tests are accepted. {input} MUST be the scheme-prefixed derived list (inputs/scheme-https.txt): url.Parse of a bare host yields an empty host, NewCrawler logs 'Failed to parse domain' and calls os.Exit(1). grep -oP was replaced by grep -oE because Git Bash grep rejects -P. The zip contains a nested directory; gospider.exe is installed at the tool root."
+    },
+    {
+      "name": "waymore",
+      "kind": "tool",
+      "stage": "urls",
+      "status": "approved",
+      "version": "8.9",
+      "install": {
+        "method": "venv",
+        "url": "https://files.pythonhosted.org/packages/4d/63/3bbcb7780be6b063d7d8f4666d645f426f580e43a7921f28cde91eea5192/waymore-8.9-py3-none-any.whl",
+        "sha256": "e64e04b672af2a9b2bd6b27d19803ea78b4bb60af5b11e7211690f84061311cf"
+      },
+      "executable": "tools/urls/waymore/venv/Scripts/waymore.exe",
+      "version_command": "tools/urls/waymore/venv/Scripts/python.exe -c \"import waymore; print(waymore.__version__)\"",
+      "version_note": "waymore --version only writes to a TTY (8.9 write() suppresses non-TTY stdout), so the version is verified by importing the package inside the venv.",
+      "python_requirements": [
+        "waymore==8.9",
+        "PyYAML==6.0.3",
+        "requests==2.34.2",
+        "termcolor==3.3.0",
+        "psutil==7.2.2",
+        "tldextract==5.4.0"
+      ],
+      "python_venv": "tools/urls/waymore/venv",
+      "python_lock": "tools/urls/waymore/requirements.lock.txt",
+      "command_template": "waymore -i {input} -mode U -l 1000 -from 2021 -oU {rawdir}/waymore.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": null,
+        "internal_concurrency_source": "not exposed; internal rate limiting and retries",
+        "effective_max_concurrency": null,
+        "rate_per_second": null,
+        "timeout_seconds": 3600
+      },
+      "notes": "Operator intake approved 2026-11-11; status stays proposed until installation and smoke tests are accepted. Installed in a dedicated venv with a pip freeze lock file. -i accepts a file (os.path.isfile check) so bare hostnames are fine. -l applies to responses (modes R/B) and is inert in -mode U; kept as supplied. First run creates ~/.config/waymore/config.yml."
+    },
+    {
+      "name": "hakrawler",
+      "kind": "tool",
+      "stage": "urls",
+      "status": "proposed",
+      "version": "git:2.1",
+      "install": null,
+      "executable": "tools/urls/hakrawler/hakrawler.exe",
+      "version_command": null,
+      "version_note": "No -version flag; running it without stdin prints usage.",
+      "command_template": "cat {input} | hakrawler -subs -u -insecure > {rawdir}/hakrawler.txt",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 8,
+        "internal_concurrency_source": "tool default (-t 8)",
+        "effective_max_concurrency": 8,
+        "rate_per_second": null,
+        "timeout_seconds": 1800
+      },
+      "notes": "Operator decision 2026-11-11: register as proposed, do not install Go, and skip installation and execution until a compatible prebuilt Windows binary is supplied. Upstream tag 2.1 (commit 61905593d82e8bac87ff7a7cca32b2adde42bb60) publishes no Windows release asset; go.mod requires Go 1.16. {input} MUST be the scheme-prefixed derived list (inputs/scheme-https.txt): extractHostname of a bare host returns an empty string and nothing is crawled."
+    },
+    {
+      "name": "smuggler",
+      "kind": "tool",
+      "stage": "triage",
+      "status": "approved",
+      "version": "git:2be871e",
+      "install": {
+        "method": "zip",
+        "url": "https://codeload.github.com/defparam/smuggler/zip/2be871e6151ce85167a277fab21c74c851d8b20b",
+        "source_commit": "2be871e6151ce85167a277fab21c74c851d8b20b",
+        "sha256": "e3776e806157329d6f50aba6914d26320ee9d4892d7bafc605aff2ed43c70497"
+      },
+      "executable": "tools/triage/smuggler/smuggler.py",
+      "version_command": "python tools/triage/smuggler/smuggler.py -h",
+      "version_note": "No -version flag; verified by pinned archive SHA256, help exit 0, and imports of lib.Payload, lib.EasySSL and the vendored colorama on Python 3.13.5.",
+      "command_template": "while IFS= read -r u; do h=$(printf '%s' \"$u\" | sed -E 's#^https?://##; s#[:/].*$##'); echo \"[+] Testing: $u\"; timeout 600 python {tool:smuggler}/smuggler.py -u \"$u\" -q -x -l {outdir}/$h.log; done < {input}",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 1,
+        "internal_concurrency_source": "single raw socket per mutation, sequential (no concurrency flag)",
+        "effective_max_concurrency": 1,
+        "rate_per_second": null,
+        "timeout_seconds": 3600
+      },
+      "notes": "Operator authorized 2026-11-16 for URL Triage. Non-disruptive TE/CL header mutation set only (configs/default.py, 14 render templates, 134 mutations); no large bodies, no DoS payloads. -x exits on the first candidate per host, -q logs issues only, -l writes plaintext to the results directory. Default method POST with a Content-Length placeholder. On Windows the tool forces NOCOLOR. PoC dumps are written by the tool to tools/triage/smuggler/payloads/ and are copied into the stage results directory afterwards. Findings are candidates, never confirmed vulnerabilities."
+    },
+    {
+      "name": "openredirex",
+      "kind": "tool",
+      "stage": "triage",
+      "status": "approved",
+      "version": "git:383aea0",
+      "install": {
+        "method": "zip",
+        "url": "https://codeload.github.com/devanshbatham/OpenRedireX/zip/383aea012eed8f3dce2b285d6df73fe5512fde03",
+        "source_commit": "383aea012eed8f3dce2b285d6df73fe5512fde03",
+        "sha256": "518d3d9e458869d66e99d29b9da9ab438d8d894bbafd32ec94c254ebb8b6b76a"
+      },
+      "executable": "tools/triage/openredirex/venv/Scripts/python.exe",
+      "version_command": "tools/triage/openredirex/venv/Scripts/python.exe tools/triage/openredirex/openredirex.py -h",
+      "version_note": "No -version flag; verified by pinned archive SHA256, help exit 0, and import of aiohttp 3.14.5 and tqdm 4.70.1 inside the dedicated venv on Python 3.13.5.",
+      "python_venv": "tools/triage/openredirex/venv",
+      "python_requirements": [
+        "aiohttp==3.14.5",
+        "aiosignal==1.4.0",
+        "aiohappyeyeballs==2.7.1",
+        "attrs==26.1.0",
+        "frozenlist==1.8.0",
+        "idna==3.20",
+        "multidict==7.2.1",
+        "propcache==0.5.4",
+        "tqdm==4.70.1",
+        "yarl==1.25.1",
+        "colorama==0.4.6"
+      ],
+      "python_lock": "tools/triage/openredirex/requirements.lock.txt",
+      "command_template": "tools/triage/openredirex/venv/Scripts/python.exe {tool:openredirex}/openredirex.py -p {tool:openredirex}/payloads.txt -c 10 < {input} > {outfile}",
+      "limits": {
+        "processes": 1,
+        "internal_concurrency": 10,
+        "internal_concurrency_source": "explicit -c 10 (tool default is 100, not used)",
+        "effective_max_concurrency": 10,
+        "rate_per_second": null,
+        "timeout_seconds": 1800
+      },
+      "notes": "Operator authorized 2026-11-16 for URL Triage. Sends HEAD requests with allow_redirects and a 10s per-request timeout. {input} MUST contain the FUZZ keyword in the parameter under test: when FUZZ is absent the tool overwrites every parameter value, so the stage builds an endpoint-deduped input where only redirect-type values are FUZZ. Payload list is the repository payloads.txt (44 entries, sha256 7f56635314e15ae334f7f5721c5f5ef46cbf1e0ca6bf7af0e7efafac11ffdbd8) and is never modified. [FOUND] means a redirect chain was observed, not a confirmed open redirect."
+    },
+    {
+      "name": "gf",
+      "kind": "tool",
+      "stage": "triage",
+      "status": "blocked",
+      "version": "git:dcd4c36",
+      "install": null,
+      "executable": null,
+      "version_command": null,
+      "command_template": null,
+      "notes": "BLOCKED for execution: tomnomnom/gf publishes no GitHub release assets (releases API returns an empty list) and the workspace has no Go toolchain (go is not installed). Installing it would require either an unapproved Go toolchain download or an untrusted third-party build, so no binary was installed and none is substituted. The official redirect pattern set is installed separately as wordlist gf-redirect-patterns and applied with gf's own semantics: main.go joins the pattern list with | inside parentheses and runs grep with the pattern's -iE flags, which the stage reproduces with grep -iE -f."
+    }
+  ],
+  "wordlists": [
+    {
+      "name": "seclists-dns-5000",
+      "kind": "wordlist",
+      "stage": "subdomains",
+      "status": "approved",
+      "url": "https://raw.githubusercontent.com/danielmiessler/SecLists/61060549893d61b428d2184bb719abf23b4b3f13/Discovery/DNS/subdomains-top1million-5000.txt",
+      "source_commit": "61060549893d61b428d2184bb719abf23b4b3f13",
+      "path": "tools/wordlists/subdomains-top1million-5000.txt",
+      "lines": 5000,
+      "sha256": "e331367c140298cb179114fdeefa78f58f696219f0dec017a28bb79487cfcf19"
+    },
+    {
+      "name": "trickest-resolvers",
+      "kind": "wordlist",
+      "stage": "subdomains",
+      "status": "approved",
+      "url": "https://raw.githubusercontent.com/trickest/resolvers/6047aa832a85852caa6ec7d0c2e071bd823a749e/resolvers.txt",
+      "source_commit": "6047aa832a85852caa6ec7d0c2e071bd823a749e",
+      "path": "tools/wordlists/resolvers-clean.txt",
+      "lines": 12123,
+      "sha256": "03afdb37cd2f75c30c52638e379036df8b01282f21e60c14afde7eaaee3c778e"
+    },
+    {
+      "name": "trickest-trusted",
+      "kind": "wordlist",
+      "stage": "subdomains",
+      "status": "approved",
+      "url": "https://raw.githubusercontent.com/trickest/resolvers/6047aa832a85852caa6ec7d0c2e071bd823a749e/resolvers-trusted.txt",
+      "source_commit": "6047aa832a85852caa6ec7d0c2e071bd823a749e",
+      "path": "tools/wordlists/trusted.txt",
+      "lines": 31,
+      "sha256": "a9a875e04f3756ad4620b2e79dbb843955ea05838b99ac3356630b6f49616d1a"
+    },
+    {
+      "name": "dnscan-subdomains-1000",
+      "kind": "wordlist",
+      "stage": "subdomains",
+      "status": "approved",
+      "url": "https://raw.githubusercontent.com/rbsec/dnscan/281721e84f18512a574da0a4917a2eff1ec9549d/subdomains-1000.txt",
+      "source_commit": "281721e84f18512a574da0a4917a2eff1ec9549d",
+      "path": "tools/wordlists/dnscan-subdomains-1000.txt",
+      "lines": 999,
+      "sha256": "b3516d5ad0394ff4efd30589db0b98f9d0b95e926001939442401ee25cd0227c"
+    },
+    {
+      "name": "gf-redirect-patterns",
+      "kind": "wordlist",
+      "stage": "triage",
+      "status": "approved",
+      "url": "https://raw.githubusercontent.com/1ndianl33t/Gf-Patterns/f686f06ae647726578920084c894100d702496cc/redirect.json",
+      "source_commit": "f686f06ae647726578920084c894100d702496cc",
+      "path": "tools/triage/gf/patterns/redirect-patterns.txt",
+      "source_path": "tools/triage/gf/patterns/redirect.json",
+      "source_sha256": "9ba78da900486c6368e01c82eb1e966ca3de0977dacccc44a1497cb9d910e36c",
+      "lines": 63,
+      "sha256": "f77f84acafe39cf052ff691cb75f2bed6c447a40f12f88adfabc22cdd1f3370b",
+      "notes": "Official gf redirect pattern set, flags -iE. Patterns are byte-identical to the upstream JSON and one per line here; the upstream JSON is kept beside it for provenance. Applied with grep -iE -f, equivalent to gf's join-with-| invocation."
+    }
+  ],
+  "system": [
+    {
+      "name": "git-bash",
+      "path": "C:\\Program Files\\Git\\bin\\bash.exe",
+      "install": null
+    },
+    {
+      "name": "curl",
+      "provided_by": "git-bash",
+      "path": "C:\\Program Files\\Git\\mingw64\\bin\\curl.exe",
+      "version": "8.12.1",
+      "install": null
+    },
+    {
+      "name": "python",
+      "path": "C:\\Users\\Abdo Elsabagh\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "version": "3.13",
+      "install": null
+    }
+  ]
+}
