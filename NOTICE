@@ -1,0 +1,61 @@
+# Third-party notices and attribution
+
+This repository combines original work with adapted and externally configured
+material. The licenses below apply to the parts identified, not to the whole
+repository. Original project code is MIT-licensed (see `LICENSE`).
+
+## Claude-BugHunter skills — CC BY 4.0
+
+The files under `.opencode/skills/` are adapted from **Claude-BugHunter** by
+Sachin Sharma:
+
+- Source: <https://github.com/elementalsouls/Claude-BugHunter>
+- Copyright (c) 2026 Sachin Sharma
+- Skill content license: Creative Commons Attribution 4.0 International
+  (CC BY 4.0) — <https://creativecommons.org/licenses/by/4.0/>
+  (upstream `LICENSE-CONTENT`)
+- Source code of that project is separately MIT-licensed (upstream `LICENSE`);
+  this repository ships none of its code.
+
+**Changes made here (CC BY 4.0 §3(a)(1)(B)):** for each imported skill, the
+frontmatter was normalized for OpenCode (the upstream `sources` field was
+removed and `name` set to the directory id), the `description` was condensed,
+and an attribution header was added at the top of the file. The methodology
+body is otherwise unmodified. Skills not imported are listed in
+`docs/skills.md` with the reason.
+
+Nothing in the adapted material grants rights to the upstream authors'
+trademarks, and the material is provided without warranties. See
+`docs/skills.md` for the per-skill import record.
+
+## OTPKit — MIT (optional, not vendored)
+
+- Source: <https://github.com/SecFathy/otpkit>
+- Licensed under the MIT License.
+- Not vendored. Installed and run by the user via `uvx otpkit`; disabled in
+  `opencode.json` by default. See `docs/integrations/otpkit.md`.
+
+## Playwright MCP — Apache-2.0 (optional, not vendored)
+
+- Source: <https://github.com/microsoft/playwright-mcp>
+- Licensed under the Apache License 2.0.
+- Not vendored. Disabled in `opencode.json` by default. See
+  `docs/integrations/browser.md`.
+
+## Notion MCP server — not vendored
+
+- Package: `@notionhq/notion-mcp-server`, installed by the operator under
+  `tools/`, which is gitignored.
+- Bridges in `scripts/mcp/` are original work in this repository (MIT).
+
+## Burp MCP server — not distributed
+
+- The Burp Suite MCP extension/JAR is obtained by the operator from its own
+  trusted source and never committed. `tools/mcp/burp/` is gitignored.
+- See `docs/integrations/burp.md`.
+
+## Recon tooling and wordlists — not vendored
+
+Tools and wordlists listed in `shared/tools.json` are downloaded by the
+operator from the URLs recorded there, each under its own upstream license.
+Nothing is redistributed by this repository.

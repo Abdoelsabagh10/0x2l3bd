@@ -19,6 +19,7 @@
     }
   ],
   "path_policy": "Every execution prepends the POSIX directory of each approved native executable to PATH, tools before system. All placeholders are rendered as POSIX paths (/a/...) before any Git Bash command runs.",
+  "system_policy": "Entries in `system` are resolved from PATH at run time, so this file stays portable. Machine-specific absolute paths belong in `shared/tools.local.json`, which is gitignored and never committed; a local entry overrides the matching portable entry by name.",
   "env": {
     "dotenv_file": ".env",
     "example_file": ".env.example",
@@ -661,20 +662,23 @@
   "system": [
     {
       "name": "git-bash",
-      "path": "C:\\Program Files\\Git\\bin\\bash.exe",
-      "install": null
+      "resolve": "path",
+      "candidates": ["bash"],
+      "install": null,
+      "notes": "Git for Windows. Provides the POSIX shell every stage command runs through."
     },
     {
       "name": "curl",
       "provided_by": "git-bash",
-      "path": "C:\\Program Files\\Git\\mingw64\\bin\\curl.exe",
-      "version": "8.12.1",
+      "resolve": "path",
+      "candidates": ["curl"],
       "install": null
     },
     {
       "name": "python",
-      "path": "C:\\Users\\Abdo Elsabagh\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
-      "version": "3.13",
+      "resolve": "path",
+      "candidates": ["python", "python3"],
+      "version_min": "3.13",
       "install": null
     }
   ]

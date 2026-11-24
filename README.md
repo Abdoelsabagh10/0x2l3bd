@@ -1,405 +1,296 @@
-# Bug Bounty Hunter Workspace
+# 0x2l3bd — Bug Bounty Hunter Workspace
 
-## 1. Project Goal
+A modular, human-led bug bounty workspace built on
+[OpenCode](https://opencode.ai). It automates the repetitive parts —
+subdomain and URL collection, JavaScript analysis, scope filtering, run
+bookkeeping — and keeps the operator in charge of every testing, exploitation,
+confirmation, and submission decision.
 
-Build a simple, modular bug bounty hunting assistant around
-**OpenCode**.
+It is not an autonomous scanner. It is a coordinator with a memory of your
+programs, a deterministic scope engine, and a small set of on-demand skills.
 
-The project is intended to support a human-led workflow: - Automate
-repetitive reconnaissance and result organization. - Keep program scope
-and program-specific requirements available to every agent. - Help
-analyze the attack surface and Burp Suite traffic. - Support manual
-testing by suggesting useful next steps and comparing evidence. -
-Prepare reports only when explicitly requested by the user.
+---
 
-The user remains in control of testing decisions, active testing,
-exploitation, finding confirmation, and report submission.
+## 1. What it actually does
 
-Do not turn this project into a large autonomous platform. Prefer
-OpenCode's native capabilities and small reusable scripts over custom
-infrastructure.
+- **Scope-first recon.** Every stage reads `programs/<program>/scope.md` and
+  filters through `scripts/bbh/`, which refuses to run on missing, invalid, or
+  contradictory scope data.
+- **Five recon stages.** Subdomains, URLs, URL triage, JavaScript analysis, and
+  focused target recon, each writing into its own `<run_id>` directory with a
+  `run.json`.
+- **Skill-assisted manual hunting.** Fourteen imported hunt skills load on
+  demand, so a session about an IDOR does not carry the SQLi playbook.
+- **Burp as the HTTP engine.** Interactive requests go through Burp's MCP
+  server, under both program scope and Burp scope.
+- **Two Notion connections.** Read-only reference material and read/write
+  engagement notes are kept apart.
+- **Evidence discipline.** Findings, hypotheses, and suggestions are labelled
+  separately, and reports are drafted only on request.
 
-## 2. Core Design Principles
+## 2. Architecture
 
-1.  **Keep it simple.** Add a component only when it solves a real need.
-2.  **Human-led hunting.** The main agent assists and coordinates; it
-    does not independently decide to exploit targets or submit reports.
-3.  **Scope-first.** Every reconnaissance or testing task must use the
-    active program's `scope.md`.
-4.  **Shared deterministic utilities.** Use scripts for repeatable
-    operations such as scope validation, normalization, and
-    deduplication. Do not spend LLM tokens asking an agent to perform
-    simple deterministic filtering.
-5.  **Specialized agents.** Each subagent has a clear responsibility and
-    can be invoked independently.
-6.  **Orchestration, not duplication.** `/full_recon` coordinates the
-    specialized agents rather than reimplementing their workflows.
-7.  **Readable outputs.** Save raw and processed results in predictable
-    locations.
-8.  **Incremental development.** Build and test one component at a time,
-    starting with the workspace and `/sub_enum`.
-9.  **No unnecessary infrastructure.** No database, RAG system, custom
-    Kali integration, Notion integration, or complex memory engine is
-    required for the initial version.
-10. **Transparent execution.** Record what ran, what completed, what
-    failed, and where outputs were saved.
-
-## 3. High-Level Architecture
-
-### Main Agent: `hunter`
-
-The main agent is the user's primary assistant and coordinator. It
-should: - Understand the user's request and current active
-program/target. - Read the relevant `program.md` and `scope.md` before
-reconnaissance or testing. - Delegate suitable work to specialized
-subagents. - Communicate with Burp Suite through the configured Burp MCP
-connection. - Help inspect requests, responses, endpoints, parameters,
-and observed behavior. - Compare information from Burp traffic with
-reconnaissance results. - Suggest potential attack surfaces and manual
-tests, clearly distinguishing hypotheses from confirmed findings. - Help
-organize notes and evidence. - Invoke report preparation only when the
-user asks.
-
-The main agent must not claim that a vulnerability is confirmed without
-sufficient evidence and user review.
-
-### Specialized Subagents
-
-Create the following specialized agents. Each must have a concise role,
-clear inputs, expected outputs, and explicit scope rules.
-
-#### `/sub_enum`
-
--   Collect subdomains for the authorized program or target.
--   Run the configured subdomain enumeration commands/tools.
--   Normalize and filter candidates through shared utilities.
--   Validate scope using the active program's `scope.md`.
--   Probe discovered hosts for HTTP(S) availability when configured.
--   Save raw candidates, filtered subdomains, out-of-scope/rejected
-    entries, and alive-host results.
--   Be callable independently.
-
-#### `/urls_enum`
-
--   Collect URLs from the supplied in-scope hosts or the program's
-    alive-host list.
--   Use the configured URL discovery commands/tools.
--   Normalize, deduplicate, and scope-check URLs through shared
-    utilities.
--   Categorize useful results where practical (for example: parameters,
-    likely API routes, static assets, and other URL groups).
--   Preserve raw and processed outputs.
--   Be callable independently.
-
-#### `/js-analysis`
-
--   Work on JavaScript URLs/files discovered during reconnaissance or
-    supplied by the user.
--   Identify reachable JS resources and analyze them using the
-    configured tools/commands.
--   Extract potentially useful endpoints, routes, parameter names,
-    technology clues, and possible exposed secrets for manual review.
--   Treat findings as leads, not confirmed vulnerabilities.
--   Save outputs and a concise summary.
--   Be callable independently.
-
-#### `/target_hunt`
-
--   Perform focused reconnaissance for one selected in-scope target,
-    such as `test.test.com`.
--   Read the program scope before running tools.
--   Gather useful host information, directories/files, content discovery
-    results, related in-scope subdomains, URLs, parameters, and
-    technology clues using the configured commands/tools.
--   Use tools such as `dirsearch` when configured and appropriate.
--   Reuse existing program-level reconnaissance results where possible
-    rather than repeating work unnecessarily.
--   Save target-specific results under that target's folder.
--   Provide a concise attack-surface summary and suggested manual
-    investigation areas.
--   Do not perform exploitation or intrusive validation unless the user
-    explicitly requests and authorizes it.
-
-#### `/vuln_report`
-
-> Renamed from `/report` on operator request to avoid confusion with
-> OpenCode's built-in `report` skill. The specialist agent ID remains
-> `report`.
-
--   Run only when the user asks for report assistance.
--   Use the program's `program.md` and `report-template.md` (if
-    provided).
--   Help review the user's description and evidence.
--   Identify missing reproduction steps, impact explanation, and
-    supporting evidence.
--   Distinguish confirmed behavior from assumptions.
--   Draft the report in the format required by the relevant
-    platform/program.
--   Save the draft under the program's `reports/` directory.
--   Do not submit reports.
-
-### `/full_recon` Orchestration Command
-
-`/full_recon` is an orchestration command, not a separate recon
-implementation.
-
-It should invoke the specialized agents in this order: 1. `/sub_enum` 2.
-`/urls_enum` 3. `/js-analysis`
-
-Each agent owns its own stage and saves its outputs. The orchestrator
-should: - Pass the active program and relevant input/output paths to
-each agent. - Wait for a stage to finish before starting the next
-dependent stage. - Check whether expected outputs exist before
-proceeding. - Record completed, skipped, and failed stages. - Produce or
-update a final recon summary. - Avoid rerunning completed work unless
-requested or the user chooses a fresh run.
-
-Cloud discovery and broader content discovery may be added as separate
-stages later if useful. Do not add more agents or stages without
-discussing the need first.
-
-## 4. Shared Utilities
-
-Filtering should initially be implemented as reusable scripts/utilities,
-not as a separate LLM subagent.
-
-Expected shared utilities: - `scope_filter`: validate domains/hosts/URLs
-against the active program scope. - `normalize`: normalize hostnames and
-URLs consistently. - `dedupe`: remove duplicate entries. -
-`result_filter`: apply type-specific filtering/categorization when
-needed.
-
-All agents should call the same utilities rather than implementing their
-own slightly different filtering rules.
-
-### Scope validation requirements
-
--   Parse the hostname from a URL; do not use naive substring matching.
--   Match exact authorized hosts and valid subdomains only when the
-    scope rules permit them.
--   Do not treat `example.com.attacker.test` as belonging to
-    `example.com`.
--   Handle ports, paths, query strings, schemes, casing, trailing dots,
-    and wildcard scope entries deliberately.
--   Respect exclusions and any program-specific restrictions.
--   When scope is ambiguous or cannot be parsed safely, do not actively
-    test the asset; flag it for user review.
--   Keep rejected/out-of-scope results in a separate output where
-    useful.
--   Never silently broaden the scope.
-
-Test the filtering utility with positive and negative test cases before
-relying on it. The user will provide or approve the exact scope entries
-and rules.
-
-## 5. Burp Suite and Tool Execution
-
--   Burp Suite is connected to OpenCode through the Burp Suite MCP
-    extension/connection.
--   The main agent uses Burp MCP to inspect and reason about available
-    HTTP traffic and requests/responses.
--   Recon tools are run by the agent in its available execution
-    environment, and their outputs are returned and saved to the
-    workspace.
--   Do not create a Kali integration, Kali MCP server, or
-    Windows-to-Kali bridge as part of the initial design.
--   Do not assume a specific tool is installed. Check tool availability
-    when relevant and report missing tools clearly.
--   The user will provide/approve the commands and tools to use. Do not
-    invent a large toolchain or silently add tools.
--   Keep tool execution and active testing within the selected program's
-    authorized scope.
-
-## 6. Workspace Layout
-
-Use one shared project/workspace for all programs.
-
-Suggested initial structure:
-
-``` text
-BugBounty-Hunter/
-├── AGENTS.md
-├── opencode.json
-├── README.md
-├── agents/
-│   ├── hunter.md
-│   ├── sub-enum.md
-│   ├── urls-enum.md
-│   ├── js-analysis.md
-│   ├── target-hunt.md
-│   └── report.md
-├── commands/
-│   └── full-recon.md
-├── skills/
-│   └── (only add skills when needed)
-├── scripts/
-│   ├── filtering/
-│   ├── normalization/
-│   └── utils/
-├── shared/
-│   └── methodology/
-└── programs/
-    └── test.com/
-        ├── program.md
-        ├── scope.md
-        ├── report-template.md
-        ├── recon/
-        │   ├── subdomains/
-        │   ├── urls/
-        │   ├── javascript/
-        │   ├── content/
-        │   ├── runs/
-        │   └── summary.md
-        ├── targets/
-        │   └── test.test.com/
-        │       ├── recon/
-        │       ├── notes/
-        │       └── findings/
-        └── reports/
+```text
+                        ┌──────────────────────┐
+                        │  Operator (human)    │
+                        └──────────┬───────────┘
+                                   │ decisions, scope, authorization
+                        ┌──────────▼───────────┐
+                        │       hunter         │  coordinator, primary agent
+                        └──┬────┬────┬────┬────┘
+             ┌─────────────┘    │    │    └──────────────┐
+             │                  │    │                   │
+    ┌────────▼───────┐ ┌────────▼──┐ │        ┌──────────▼────────┐
+    │ recon agents   │ │ report    │ │        │ skills (on demand)│
+    │ sub-enum       │ │ agent     │ │        │ .opencode/skills  │
+    │ urls-enum      │ └───────────┘ │        └───────────────────┘
+    │ url-triager    │               │
+    │ js-analysis    │      ┌────────▼─────────┐
+    │ target-hunt    │      │ integrations     │
+    └────────┬───────┘      │ burp      (HTTP) │
+             │              │ notion-main (RO) │
+    ┌────────▼───────┐      │ notion-bb  (RW)  │
+    │ scripts/bbh    │      │ otpkit  (opt.)   │
+    │ scope, dedupe, │      │ browser   (native│
+    │ normalize,     │      └──────────────────┘
+    │ classify, runs │
+    └────────┬───────┘
+             │
+    ┌────────▼───────────────────────────────────┐
+    │ programs/<program>/{recon,targets,reports} │
+    │ gitignored: real engagement data           │
+    └────────────────────────────────────────────┘
 ```
 
-The actual OpenCode file conventions should be checked against the
-installed/current OpenCode version before creating configuration files.
-Do not assume unsupported paths or syntax.
+## 3. Repository layout
 
-### Program-level vs target-level data
+```text
+AGENTS.md                  workspace rules and Burp policy
+opencode.json              agents, permissions, MCP servers
+LICENSE  NOTICE            project license and third-party attribution
+README.md                  this file
+docs/
+  skills.md                skill index, provenance, when to use
+  integrations/            burp.md, notion.md, otpkit.md, browser.md
+.opencode/
+  agents/                  hunter + six specialists
+  commands/                slash entry points
+  skills/                  fourteen on-demand skills
+shared/
+  tools.json               approved tool registry (portable)
+  tools.local.json         machine overrides (gitignored)
+  tools-policy.md          install and execution policy
+  workflows/               operator methodology
+scripts/
+  bbh/                     deterministic scope/filter/run utilities
+  bbh_cli.py               CLI for the above
+  bootstrap_program.py     wildcard program bootstrap
+  mcp/                     Notion bridges + read-only filter
+  tests/                   Python and Node tests
+programs/
+  _template/               tracked template for new programs
+  <program>/               real engagement data, gitignored
+```
 
--   `programs/<program>/recon/` stores shared, program-wide
-    reconnaissance results.
--   `programs/<program>/targets/<target>/` stores work specific to a
-    selected target.
--   Target-specific recon must not overwrite program-wide recon.
--   Reuse program-wide results when possible, and record when
-    target-specific work supplements or refreshes them.
--   `reports/` is at the program root because reports belong to the
-    program and its reporting requirements, not necessarily to one host.
+## 4. Agents
 
-## 7. Program Context Files
+| Agent | Mode | Role |
+| --- | --- | --- |
+| `hunter` | primary | Reads scope, plans, delegates, analyzes Burp traffic, keeps evidence labelled |
+| `sub-enum` | subagent | Subdomain collection, alive probing |
+| `urls-enum` | subagent | URL collection, dedupe, categorisation, live probing |
+| `url-triager` | subagent | Passive triage plus bounded git-exposure, smuggling, and open-redirect checks |
+| `js-analysis` | subagent | JS discovery, endpoints, parameters, secret leads |
+| `target-hunt` | subagent | Focused recon for one in-scope host |
+| `report` | subagent | Readiness review and report drafting; never submits |
 
-Each program should have the following files.
+Permissions are deliberately narrow. Agents write under `programs/**` and never
+edit `scope.md`, `program.md`, `AGENTS.md`, `shared/`, or `opencode.json` on
+their own. Execution is `ask` unless it is a `python` command.
 
-### `program.md`
+## 5. Commands
 
-Describes the program context, separate from technical scope: - Program
-name and platform (for example HackerOne, Bugcrowd, or a private
-program). - Program URL/reference if the user supplies it. - Short
-description and relevant program context. - Report requirements and
-expected report structure. - Severity/priority guidance if supplied by
-the program. - Special testing rules or operational notes that are not
-simply asset scope. - Any program-specific reporting template or
-submission requirements.
+| Command | Runs |
+| --- | --- |
+| `/sub_enum [program\|*.wildcard] [apex\|run]` | Subdomain stage |
+| `/urls_enum [input\|program\|*.wildcard] [program\|input]` | URL stage, then triage |
+| `/url_triage [program\|*.wildcard] [run]` | Triage a completed URL run |
+| `/js-analysis [program\|*.wildcard] [input\|run]` | JavaScript stage |
+| `/target_hunt [program\|*.wildcard] <host> [run]` | One-host recon |
+| `/full_recon [program\|*.wildcard] [apex]` | Sequential orchestration |
+| `/vuln_report <program> <review\|draft> [path]` | Report review or draft |
 
-Do not invent program rules. Mark unknown information as `Not provided`
-and ask the user when necessary.
+A first argument starting with `*.` is an operator-declared wildcard scope. It
+bootstraps a new program workspace through
+`shared/workflows/program-bootstrap.md`. That is a declaration, never proof of
+program authorization.
 
-### `scope.md`
+## 6. Skills
 
-The authoritative source for authorized assets and scope restrictions: -
-In-scope domains, hosts, IPs, URLs, or other asset identifiers. -
-Wildcard entries and their intended meaning. - Out-of-scope assets and
-exclusions. - Restrictions on testing methods, rate limits, accounts, or
-environments if provided. - Any special conditions that affect whether
-an asset may be tested.
+Fourteen skills live in `.opencode/skills/`, adapted from
+[Claude-BugHunter](https://github.com/elementalsouls/Claude-BugHunter) (CC BY
+4.0, © 2026 Sachin Sharma — see `NOTICE`).
 
-The agents must read this file before running reconnaissance or testing
-for that program. `program.md` does not override `scope.md`.
+`bb-methodology`, `hunt-idor`, `hunt-auth-bypass`, `hunt-business-logic`,
+`hunt-api-misconfig`, `hunt-sqli`, `hunt-ssrf`, `hunt-xss`,
+`hunt-race-condition`, `hunt-graphql`, `hunt-http-smuggling`,
+`evidence-hygiene`, `triage-validation`, `report-writing`.
 
-### `report-template.md`
+They are loaded **contextually**, one or two per task, never preloaded. A skill
+is reference material: it never overrides scope, `AGENTS.md`, or an operator
+decision. `docs/skills.md` records what was imported, what was deliberately not
+imported, and why.
 
-Optional program-specific report template. If present, `/vuln_report` should
-follow it. If absent, ask the user for the required format or use a
-clearly labeled generic draft only after the user approves.
+## 7. MCP integrations
 
-## 8. Recon Run Metadata and Checkpoints
+Configured in `opencode.json` under `mcp.servers`.
 
-Every reconnaissance run should have a run record, stored under the
-relevant program's `recon/runs/` directory. Target-specific runs may be
-stored under that target's `recon/runs/` directory if needed.
+| Server | Transport | State | Purpose |
+| --- | --- | --- | --- |
+| `burp` | local stdio → SSE | enabled, needs local JAR | HTTP analysis and testing |
+| `notion-main` | local stdio | enabled, needs token | Read-only methodology |
+| `notion-bb` | local stdio | enabled, needs token | Read/write engagement notes |
+| `otpkit` | local stdio (`uvx`) | **disabled** | Temporary email/SMS for permitted tests |
+| `playwright` | local stdio (`npx`) | **disabled** | Optional persistent browser automation |
 
-Suggested record fields: - Run ID. - Start and end timestamps. - Program
-name. - Target(s)/input list used. - Scope file/version or a
-snapshot/hash where practical. - Agents/stages executed. - Tools and
-command names used. - Completion status for each stage: completed,
-failed, skipped, or not started. - Output paths. - Error/log paths. -
-Whether the run was resumed or started fresh. - Notes about missing
-tools or partial results.
+- **Burp** — `docs/integrations/burp.md`. The JAR is never committed; MCP-native
+  requests do not appear in Proxy history.
+- **Notion** — `docs/integrations/notion.md`. `notion-main` runs behind
+  `scripts/mcp/readonly-filter.mjs`, which advertises 14 read tools and refuses
+  the 10 write tools locally.
+- **OTPKit** — `docs/integrations/otpkit.md`. Optional; free SMS numbers are
+  public and shared.
+- **Browser** — `docs/integrations/browser.md`. The native OpenCode browser is
+  the default; Playwright is opt-in.
 
-Use simple JSON or Markdown metadata; do not introduce a database for
-this.
+## 8. Install
 
-### Resume behavior
+Requirements: OpenCode V2, Python 3.13, Node 20+, Git.
 
--   Before starting, inspect existing outputs and run metadata.
--   If a previous run stopped, report which stages completed and which
-    did not.
--   Resume only from a safe, clearly identified checkpoint.
--   Do not assume old outputs are current or valid after the scope
-    changes.
--   If scope or input targets changed, flag the previous run as
-    potentially stale and ask whether to start fresh when needed.
--   Never overwrite useful previous results silently. Use a new run
-    directory or explicit user-approved overwrite behavior.
+```sh
+git clone https://github.com/Abdoelsabagh10/0x2l3bd.git
+cd 0x2l3bd
+cp .env.example .env          # Windows: Copy-Item .env.example .env
+python -m unittest discover -s scripts/tests -p "test_*.py"
+node --test scripts/tests/readonly-filter.test.mjs
+```
 
-## 9. Manual Hunting Workflow
+Then:
 
-The user may ask the main agent to: - Review Burp requests/responses. -
-Extract endpoints from Burp traffic. - Compare endpoints observed in
-Burp with endpoints discovered in JS files. - Identify endpoints present
-in one source but absent in another. - Compare parameters and HTTP
-methods. - Review authentication flows or user-provided login
-methodology. - Suggest test cases and explain why they may be
-relevant. - Organize observations and evidence in target notes/findings.
+1. Fill `.env` with the tokens you actually use. Every value is optional; a
+   missing token disables that integration only.
+2. Install the Notion server package under `tools/mcp/notion` if you use Notion.
+3. Drop the Burp proxy JAR at `tools/mcp/burp/mcp-proxy.jar` if you use Burp.
+4. Run `opencode mcp list` and confirm what connected.
+5. Copy `programs/_template` to `programs/<program>` and fill in `scope.md`
+   before any recon.
 
-The agent should be collaborative: the user may test one idea manually
-while the agent investigates or organizes another task. Clearly
-separate: - Observed facts. - Hypotheses. - Suggested tests. - Confirmed
-findings.
+Windows note: `shared/tools.json` resolves system tools from `PATH`. Put your
+own absolute paths in `shared/tools.local.json`, which is gitignored.
 
-Do not claim that an endpoint is vulnerable merely because it looks
-interesting.
+## 9. Workflows
 
-## 10. Reporting Workflow
+**Program-wide recon**
 
--   The user explicitly triggers report work.
--   The user supplies or explains the finding and evidence.
--   The agent helps validate whether the evidence supports the claimed
-    impact and identifies gaps.
--   The agent follows the program's reporting requirements/template.
--   Drafts are stored in `programs/<program>/reports/`.
--   No automatic submission.
+```text
+/full_recon acme            # existing program
+/full_recon *.acme.test     # bootstrap a program workspace first
+```
 
-## 11. Initial Implementation Plan
+**One host, deeper**
 
-Implement incrementally in this order:
+```text
+/target_hunt acme api.acme.test
+```
 
-1.  Inspect the current OpenCode version, its supported
-    agent/command/skill conventions, and the existing workspace. Do not
-    make assumptions about configuration syntax.
-2.  Create the basic workspace and shared instructions.
-3.  Create program folder conventions and example `program.md`,
-    `scope.md`, and `report-template.md` templates.
-4.  Implement the shared scope/normalization/deduplication utilities.
-5.  Test the filtering utility thoroughly with in-scope, out-of-scope,
-    wildcard, URL, port, and deceptive-substring cases.
-6.  Build `/sub_enum` and test it with user-provided commands and a test
-    scope.
-7.  Build `/urls_enum`.
-8.  Build `/js-analysis`.
-9.  Build `/target_hunt`.
-10. Build `/full_recon` orchestration and run metadata/checkpoint
-    behavior.
-11. Build `/vuln_report`.
-12. Connect and verify Burp MCP behavior with the main agent.
+**Manual hunting with Burp and a skill**
 
-Do not build everything in one pass. At each stage, explain what was
-created, how to use it, and how it was tested. Ask the user before
-adding tools, integrations, or major architecture changes.
+```text
+Check api.acme.test/v2/orders for object-level authorization issues.
+Use Burp for the requests. Load hunt-idor if it fits.
+```
 
-## 12. Out of Scope for the Initial Version
+**Temporary verification, when the program allows it**
 
-Do not add these unless the user later requests them: - A dedicated
-Filter LLM subagent. - SQLite or another database. - RAG
-infrastructure. - Notion integration. - Custom Kali
-MCP/bridge/integration. - Large autonomous exploitation workflows. -
-Automatic vulnerability submission. - Large collections of unused
-skills. - Complex memory or learning engines.
+```text
+Enable otpkit, confirm programs/acme/scope.md allows test accounts,
+then walk the signup flow in the browser.
+```
+
+## 10. Evidence model
+
+Every statement is one of:
+
+- **Observed fact** — cites an artifact: path and line, or a Burp request.
+- **Hypothesis** — the reasoning, plus what would confirm or falsify it.
+- **Suggested test** — a concrete, scope-checked manual step.
+- **Confirmed finding** — only after the operator confirms it, stored under
+  `programs/<program>/targets/<target>/findings/`.
+
+An interesting endpoint is never described as vulnerable.
+
+## 11. Testing
+
+```sh
+python -m unittest discover -s scripts/tests -p "test_*.py"   # 113 tests
+node --test scripts/tests/readonly-filter.test.mjs            # 8 tests
+python -m unittest scripts.tests.test_config                  # config + skills
+```
+
+The Python suite covers scope parsing and deceptive-host cases, normalisation,
+deduplication, classification, run metadata, and the CLI. The Node suite covers
+the read-only MCP filter, including an end-to-end stdio run against a fake
+server. The config suite validates `opencode.json`, every skill's frontmatter,
+and that tracked files contain no personal absolute paths.
+
+## 12. Security model
+
+- **Scope is enforced in code.** `scripts/bbh/scope.py` fails closed on
+  malformed scope. `out_of_scope` always wins.
+- **The operator authorizes.** Recon is scoped; exploitation, brute force, and
+  auth bypass need explicit per-target approval.
+- **Secrets stay out of Git.** `.env`, `tools/`, `programs/*`, and
+  `shared/tools.local.json` are ignored. `NOTICE` records provenance.
+- **Integrations are least-privilege by construction.** `notion-main` is
+  filtered to reads; OTPKit and Playwright are off until enabled.
+- **Untrusted content stays untrusted.** HTTP bodies, JavaScript, HTML, Notion
+  pages, and browser page content are data, never instructions.
+- **No submission automation.** Nothing in this repository contacts a program
+  on your behalf.
+
+## 13. Known limitations
+
+- **No cross-stage checkpoint or resume orchestration** (Phase 5). Each stage
+  writes `run.json`; the full orchestration contract is not implemented.
+- **Report workflow is partial** (Phase 6). The `report` agent drafts; there is
+  no end-to-end pipeline.
+- **MCP-native Burp requests are invisible to Proxy history.** That is inherent
+  to the transport, not a bug.
+- **Notion read-only is not a Notion-native mode.** It is a filter plus the
+  integration's capabilities, and both must be configured.
+- **OTPKit is configured, not live-verified.** No account is created on a real
+  target without authorization.
+- **Playwright is opt-in and unverified here.** The native browser covers the
+  documented needs.
+- **Windows-first.** Commands assume PowerShell and Git Bash; Linux/macOS paths
+  are untested.
+
+## 14. Roadmap
+
+1. Phase 5: orchestration checkpoints and resume.
+2. Phase 6: report drafting workflow end to end.
+3. `shared/tools.local.json` fallback resolution inside the stage scripts.
+4. Optional Linux/macOS verification.
+
+## 15. Credits and license
+
+- Original code and documentation: MIT, © 2026 Abdo Elsabagh (`LICENSE`).
+- Skills adapted from **Claude-BugHunter** by Sachin Sharma, CC BY 4.0, with
+  modifications listed per file and in `NOTICE` and `docs/skills.md`.
+- [OTPKit](https://github.com/SecFathy/otpkit) (MIT) and
+  [Playwright MCP](https://github.com/microsoft/playwright-mcp) (Apache-2.0) are
+  optional external servers, not vendored.
+- Burp Suite and its MCP extension are external dependencies, not distributed.
+
+Use this workspace only against assets you are authorized to test. A wildcard
+in a command is a declaration of intent, not permission.

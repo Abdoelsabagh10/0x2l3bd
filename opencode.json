@@ -21,24 +21,42 @@
       "action": "webfetch",
       "resource": "*",
       "effect": "ask"
-    },
-    {
-      "action": "edit",
-      "resource": "scripts/mcp/notion-bb.mjs",
-      "effect": "ask"
     }
   ],
-    "mcp": {
+  "mcp": {
     "servers": {
       "burp": {
         "type": "local",
         "command": [
           "java",
           "-jar",
-          "C:/Users/Abdo Elsabagh/OneDrive/Dokumente/mcp-proxy.jar",
+          "tools/mcp/burp/mcp-proxy.jar",
           "--sse-url",
           "http://127.0.0.1:9876/"
-        ]
+        ],
+        "cwd": "."
+      },
+      "notion-main": {
+        "type": "local",
+        "command": ["node", "scripts/mcp/notion-main.mjs"],
+        "cwd": "."
+      },
+      "notion-bb": {
+        "type": "local",
+        "command": ["node", "scripts/mcp/notion-bb.mjs"],
+        "cwd": "."
+      },
+      "otpkit": {
+        "type": "local",
+        "command": ["uvx", "otpkit"],
+        "cwd": ".",
+        "disabled": true
+      },
+      "playwright": {
+        "type": "local",
+        "command": ["npx", "-y", "@playwright/mcp@latest"],
+        "cwd": ".",
+        "disabled": true
       }
     }
   }

@@ -83,3 +83,17 @@ Fields `install`, `sha256`, `version_command`, and `notes` are optional in shape
 but recommended. A missing `install` block means the tool must already exist at
 `executable`; a missing executable is a `blocked` condition, not an install
 trigger.
+
+## Machine-local overrides
+
+`shared/tools.json` is tracked, so it stays portable:
+
+- `system` entries resolve from `PATH` through `resolve: "path"` and a list of
+  candidate command names.
+- Absolute paths belong in `shared/tools.local.json`, which is gitignored. A
+  local entry overrides the matching portable entry by `name`.
+- Never commit a machine-specific path to the tracked registry. A personal path
+  in a public file is both a leak and a broken setup for every other user.
+- MCP binaries follow the same rule: the Burp proxy JAR lives at
+  `tools/mcp/burp/mcp-proxy.jar`, which is gitignored, and `opencode.json`
+  refers to it by that relative path.
