@@ -164,6 +164,11 @@ class SkillTests(unittest.TestCase):
                 self.assertEqual(set(front), {"name", "description"})
                 self.assertEqual(front["name"], directory.name)
                 self.assertGreaterEqual(len(front["description"]), 40)
+                self.assertLessEqual(
+                    len(front["description"]),
+                    300,
+                    "description is always visible; keep it under 300 characters",
+                )
                 self.assertNotIn(front["name"], seen, "duplicate skill name")
                 seen.add(front["name"])
 
@@ -173,6 +178,12 @@ class SkillTests(unittest.TestCase):
                 head = (directory / "SKILL.md").read_text(encoding="utf-8")[:2000]
                 for marker in ATTRIBUTION_MARKERS:
                     self.assertIn(marker, head, f"missing attribution marker: {marker}")
+                self.assertIn(
+                    f"https://github.com/elementalsouls/Claude-BugHunter (skills/{directory.name}/SKILL.md)",
+                    head,
+                    "attribution must name the exact upstream file",
+                )
+                self.assertIn("MODIFIED", head)
 
     def test_skills_are_not_copied_into_programs(self) -> None:
         programs = ROOT / "programs"
@@ -188,6 +199,25 @@ class SkillTests(unittest.TestCase):
                 self.assertIn(f"`{directory.name}`", index)
         self.assertIn("Claude-BugHunter", index)
         self.assertIn("CC BY 4.0", index)
+
+    def test_imported_table_matches_skill_directories(self) -> None:
+        """The index is authoritative for readers; keep it equal to reality."""
+        index = read_text("docs/skills.md")
+        start = index.index("## Imported skills")
+        end = index.index("## Reviewed and not imported")
+        section = index[start:end]
+        listed = set(re.findall(r"^\| `([a-z0-9-]+)` \|", section, re.MULTILINE))
+        actual = {directory.name for directory in self.skill_dirs}
+        self.assertEqual(
+            sorted(listed - actual),
+            [],
+            "documented as imported but missing from .opencode/skills",
+        )
+        self.assertEqual(
+            sorted(actual - listed),
+            [],
+            "present in .opencode/skills but missing from docs/skills.md",
+        )
 
 
 class ReadOnlyFilterTests(unittest.TestCase):
