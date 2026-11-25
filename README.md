@@ -19,7 +19,7 @@ programs, a deterministic scope engine, and a small set of on-demand skills.
 - **Five recon stages.** Subdomains, URLs, URL triage, JavaScript analysis, and
   focused target recon, each writing into its own `<run_id>` directory with a
   `run.json`.
-- **Skill-assisted manual hunting.** Fourteen imported hunt skills load on
+- **Skill-assisted manual hunting.** Twenty-one imported hunt skills load on
   demand, so a session about an IDOR does not carry the SQLi playbook.
 - **Burp as the HTTP engine.** Interactive requests go through Burp's MCP
   server, under both program scope and Burp scope.
@@ -75,7 +75,7 @@ docs/
 .opencode/
   agents/                  hunter + six specialists
   commands/                slash entry points
-  skills/                  fourteen on-demand skills
+  skills/                  twenty-one on-demand skills
 shared/
   tools.json               approved tool registry (portable)
   tools.local.json         machine paths (gitignored, not read by code)
@@ -127,19 +127,22 @@ program authorization.
 
 ## 6. Skills
 
-Fourteen skills live in `.opencode/skills/`, adapted from
+Twenty-one skills live in `.opencode/skills/`, adapted from
 [Claude-BugHunter](https://github.com/elementalsouls/Claude-BugHunter) (CC BY
 4.0, © 2026 Sachin Sharma — see `NOTICE`).
 
-`bb-methodology`, `hunt-idor`, `hunt-auth-bypass`, `hunt-business-logic`,
-`hunt-api-misconfig`, `hunt-sqli`, `hunt-ssrf`, `hunt-xss`,
-`hunt-race-condition`, `hunt-graphql`, `hunt-http-smuggling`,
-`evidence-hygiene`, `triage-validation`, `report-writing`.
+`bb-methodology`, `hunt-idor`, `hunt-auth-bypass`, `hunt-oauth`, `hunt-ato`,
+`hunt-cors`, `hunt-host-header`, `hunt-business-logic`,
+`hunt-api-misconfig`, `hunt-source-leak`, `hunt-spa-api`, `hunt-sqli`,
+`hunt-ssrf`, `hunt-file-upload`, `hunt-xss`, `hunt-race-condition`,
+`hunt-graphql`, `hunt-http-smuggling`, `evidence-hygiene`,
+`triage-validation`, `report-writing`.
 
 They are loaded **contextually**, one or two per task, never preloaded. A skill
 is reference material: it never overrides scope, `AGENTS.md`, or an operator
-decision. `docs/skills.md` records what was imported, what was deliberately not
-imported, and why.
+decision, and tools named inside a skill are not thereby approved.
+`docs/skills.md` records what was imported, what was deliberately not imported,
+and why.
 
 ## 7. MCP integrations
 
@@ -234,7 +237,7 @@ An interesting endpoint is never described as vulnerable.
 ## 11. Testing
 
 ```sh
-python -m unittest discover -s scripts/tests -p "test_*.py"   # 137 tests
+python -m unittest discover -s scripts/tests -p "test_*.py"   # 138 tests
 node --test scripts/tests/readonly-filter.test.mjs            # 12 tests
 python -m unittest scripts.tests.test_config                  # config + skills
 ```

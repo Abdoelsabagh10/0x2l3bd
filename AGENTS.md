@@ -170,7 +170,7 @@ Phase 2 complete: rules, agents, commands, templates, tool registry.
 Phase 3 complete: `scripts/bbh/` shared utilities and tests.
 Phase 4 complete: approved tools installed and smoke-tested.
 Phase 7 complete: Burp Suite MCP connected through a local proxy process.
-Skills and MCP integrations complete: 14 on-demand skills in `.opencode/skills/`,
+Skills and MCP integrations complete: 21 on-demand skills in `.opencode/skills/`,
 portable MCP configuration in `opencode.json`, a read-only `notion-main` filter
 under `scripts/mcp/`, and the setup notes in `docs/integrations/`.
 The interactive-hunting policy is section 8. Skills and integration rules are
