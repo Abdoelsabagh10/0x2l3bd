@@ -78,7 +78,7 @@ docs/
   skills/                  fourteen on-demand skills
 shared/
   tools.json               approved tool registry (portable)
-  tools.local.json         machine overrides (gitignored)
+  tools.local.json         machine paths (gitignored, not read by code)
   tools-policy.md          install and execution policy
   workflows/               operator methodology
 scripts/
@@ -185,8 +185,10 @@ Then:
 5. Copy `programs/_template` to `programs/<program>` and fill in `scope.md`
    before any recon.
 
-Windows note: `shared/tools.json` resolves system tools from `PATH`. Put your
-own absolute paths in `shared/tools.local.json`, which is gitignored.
+Windows note: `shared/tools.json` records system tools by command name, intended
+to resolve from `PATH`. Record your own absolute paths in
+`shared/tools.local.json`, which is gitignored. No code loads either file: they
+are operator and agent reference data, so nothing resolves automatically today.
 
 ## 9. Workflows
 
@@ -232,8 +234,8 @@ An interesting endpoint is never described as vulnerable.
 ## 11. Testing
 
 ```sh
-python -m unittest discover -s scripts/tests -p "test_*.py"   # 113 tests
-node --test scripts/tests/readonly-filter.test.mjs            # 8 tests
+python -m unittest discover -s scripts/tests -p "test_*.py"   # 137 tests
+node --test scripts/tests/readonly-filter.test.mjs            # 12 tests
 python -m unittest scripts.tests.test_config                  # config + skills
 ```
 
@@ -279,7 +281,9 @@ and that tracked files contain no personal absolute paths.
 
 1. Phase 5: orchestration checkpoints and resume.
 2. Phase 6: report drafting workflow end to end.
-3. `shared/tools.local.json` fallback resolution inside the stage scripts.
+3. A registry resolver, only if a stage ever needs one: nothing reads
+   `shared/tools.json` or `shared/tools.local.json` today, so overrides are a
+   documented convention rather than implemented behaviour.
 4. Optional Linux/macOS verification.
 
 ## 15. Credits and license

@@ -127,6 +127,61 @@ test("non-JSON and non-tools traffic passes through unchanged", () => {
   );
 });
 
+test("a JSON-RPC batch containing a write call is not forwarded", () => {
+  const filter = makeFilter();
+  const batch = JSON.stringify([
+    { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "API-delete-a-block" } },
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "API-get-self" } },
+  ]);
+
+  const { toChild, toClient } = filter.onClientLine(batch);
+  assert.deepEqual(toChild, [], "no part of a refused batch may reach the server");
+  assert.equal(toClient.length, 1);
+  assert.equal(JSON.parse(toClient[0]).error.code, -32601);
+  assert.deepEqual(filter.blockedCalls(), ["API-delete-a-block"]);
+});
+
+test("a JSON-RPC batch of allowed calls is forwarded unchanged", () => {
+  const filter = makeFilter();
+  const batch = JSON.stringify([
+    { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "API-get-self" } },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+  ]);
+
+  assert.deepEqual(filter.onClientLine(batch).toChild, [batch]);
+  assert.deepEqual(filter.blockedCalls(), []);
+});
+
+test("batched tools/list responses are filtered element by element", () => {
+  const filter = makeFilter();
+  filter.onClientLine(JSON.stringify({ jsonrpc: "2.0", id: 5, method: "tools/list" }));
+
+  const response = JSON.stringify([
+    { jsonrpc: "2.0", id: 5, result: { tools: [...READ_TOOLS, ...WRITE_TOOLS].map((name) => ({ name })) } },
+    { jsonrpc: "2.0", id: 6, result: { ok: true } },
+  ]);
+
+  const emitted = JSON.parse(filter.onServerLine(response).toClient[0]);
+  assert.equal(emitted.length, 2);
+  assert.equal(emitted[0].result.tools.length, READ_TOOLS.length);
+  assert.ok(!emitted[0].result.tools.some((tool) => WRITE_TOOLS.includes(tool.name)));
+  assert.deepEqual(emitted[1], { jsonrpc: "2.0", id: 6, result: { ok: true } });
+});
+
+test("a refused tools/call notification gets no reply", () => {
+  const filter = makeFilter();
+  const notification = JSON.stringify({
+    jsonrpc: "2.0",
+    method: "tools/call",
+    params: { name: "API-patch-page" },
+  });
+
+  const { toChild, toClient } = filter.onClientLine(notification);
+  assert.deepEqual(toChild, []);
+  assert.deepEqual(toClient, [], "notifications must not receive a response");
+  assert.deepEqual(filter.blockedCalls(), ["API-patch-page"]);
+});
+
 test("end to end: proxy advertises reads, forwards reads, blocks writes", async () => {
   const child = spawn(process.execPath, ["scripts/tests/fixtures/run-filter.mjs"], {
     cwd: REPO_ROOT,

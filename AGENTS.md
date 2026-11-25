@@ -55,7 +55,7 @@ docs/integrations/     burp, notion, otpkit, browser setup notes
 .opencode/commands/    slash entry points
 .opencode/skills/      on-demand skills (contextual, not preloaded)
 shared/tools.json      approved tool registry (portable)
-shared/tools.local.json machine path overrides (gitignored)
+shared/tools.local.json machine paths (gitignored, not read by code)
 shared/tools-policy.md installation and execution policy
 shared/workflows/      operator methodology and workflow notes
 shared/methodology/    testing notes and checklists

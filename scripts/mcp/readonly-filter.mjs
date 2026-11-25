@@ -8,6 +8,10 @@
  *   2. `tools/call` requests for anything outside the allowlist are answered
  *      locally with a JSON-RPC error and never reach the child process.
  *
+ * JSON-RPC batches (arrays) are handled too: a batch containing any refused
+ * call is not forwarded at all, and batched `tools/list` responses are filtered
+ * element by element. Notifications are refused silently, as JSON-RPC requires.
+ *
  * Unknown tools are denied. Keep the allowlist in sync with the upstream
  * server; a new upstream read tool stays blocked until it is added here.
  *
@@ -73,6 +77,49 @@ export function createFilter({ allow, label = "readonly" } = {}) {
   const pendingLists = new Set();
   const blocked = [];
 
+  /** Decide one client message. */
+  const processClientMessage = (msg) => {
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
+      return { forward: true, reply: null, refused: false };
+    }
+
+    if (msg.method === "tools/call") {
+      const name = msg.params && msg.params.name;
+      if (typeof name !== "string" || !allowSet.has(name)) {
+        blocked.push(typeof name === "string" ? name : "<unnamed>");
+        process.stderr.write(`[${label}] refused tools/call ${blocked.at(-1)}\n`);
+        // A notification has no id and must not receive a reply.
+        return { forward: false, reply: msg.id === undefined ? null : rejectCall(msg.id, label), refused: true };
+      }
+      return { forward: true, reply: null, refused: false };
+    }
+
+    if (msg.method === "tools/list" && msg.id !== undefined && msg.id !== null) {
+      pendingLists.add(msg.id);
+    }
+    return { forward: true, reply: null, refused: false };
+  };
+
+  /** Filter one server message in place; returns the message to emit. */
+  const processServerMessage = (msg) => {
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) return msg;
+
+    const isPendingList = msg.id !== undefined && msg.id !== null && pendingLists.has(msg.id);
+    if (!isPendingList) return msg;
+
+    pendingLists.delete(msg.id);
+    const tools = msg.result && Array.isArray(msg.result.tools) ? msg.result.tools : null;
+    if (!tools) return msg;
+
+    const kept = tools.filter((tool) => tool && allowSet.has(tool.name));
+    const hidden = tools.length - kept.length;
+    if (hidden > 0) {
+      process.stderr.write(`[${label}] hid ${hidden} non-read tool(s) from tools/list\n`);
+    }
+    msg.result.tools = kept;
+    return msg;
+  };
+
   return {
     blockedCalls() {
       return blocked.slice();
@@ -80,48 +127,40 @@ export function createFilter({ allow, label = "readonly" } = {}) {
 
     /** Client -> server. Returns lines to forward and lines to answer locally. */
     onClientLine(line) {
-      const msg = parseLine(line);
-      if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
-        return { toChild: [line], toClient: [] };
-      }
+      const parsed = parseLine(line);
+      if (parsed === undefined) return { toChild: [line], toClient: [] };
 
-      if (msg.method === "tools/call") {
-        const name = msg.params && msg.params.name;
-        if (typeof name !== "string" || !allowSet.has(name)) {
-          blocked.push(typeof name === "string" ? name : "<unnamed>");
-          process.stderr.write(`[${label}] refused tools/call ${blocked.at(-1)}\n`);
-          return { toChild: [], toClient: [rejectCall(msg.id, label)] };
+      if (Array.isArray(parsed)) {
+        let reply = null;
+        let refused = false;
+        for (const item of parsed) {
+          const result = processClientMessage(item);
+          if (result.refused) {
+            refused = true;
+            reply = reply ?? result.reply;
+          }
+        }
+        if (refused) {
+          // Reject the whole batch: never forward a partially refused batch.
+          return { toChild: [], toClient: reply ? [reply] : [] };
         }
         return { toChild: [line], toClient: [] };
       }
 
-      if (msg.method === "tools/list" && msg.id !== undefined && msg.id !== null) {
-        pendingLists.add(msg.id);
-      }
-      return { toChild: [line], toClient: [] };
+      const result = processClientMessage(parsed);
+      if (result.reply) return { toChild: [], toClient: [result.reply] };
+      return { toChild: result.forward ? [line] : [], toClient: [] };
     },
 
     /** Server -> client. Rewrites the tools catalog, forwards everything else. */
     onServerLine(line) {
-      const msg = parseLine(line);
-      if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
-        return { toClient: [line] };
+      const parsed = parseLine(line);
+      if (parsed === undefined) return { toClient: [line] };
+
+      if (Array.isArray(parsed)) {
+        return { toClient: [JSON.stringify(parsed.map(processServerMessage))] };
       }
-
-      const isPendingList = msg.id !== undefined && msg.id !== null && pendingLists.has(msg.id);
-      if (!isPendingList) return { toClient: [line] };
-
-      pendingLists.delete(msg.id);
-      const tools = msg.result && Array.isArray(msg.result.tools) ? msg.result.tools : null;
-      if (!tools) return { toClient: [line] };
-
-      const kept = tools.filter((tool) => tool && allowSet.has(tool.name));
-      const hidden = tools.length - kept.length;
-      if (hidden > 0) {
-        process.stderr.write(`[${label}] hid ${hidden} non-read tool(s) from tools/list\n`);
-      }
-      msg.result.tools = kept;
-      return { toClient: [JSON.stringify(msg)] };
+      return { toClient: [JSON.stringify(processServerMessage(parsed))] };
     },
   };
 }
